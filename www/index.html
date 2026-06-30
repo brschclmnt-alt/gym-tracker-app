@@ -547,7 +547,7 @@ function ExCard({ex,prevEx,onChange,onRemove,setupMode}){
               </div>
               {ex.sets.map((s,si)=>{
                 const setRR=s.repRange||ex.repRange||"8-12";
-                const prev=prevEx&&prevEx.sets&&prevEx.sets[si];
+                const prev=prevEx&&prevEx.sets&&(prevEx.sets.find(ps=>ps.n===s.n)||prevEx.sets[si]);
                 const prog=prev?getProgression(prev,setRR):null;
                 return(
                   <div key={s.id} style={{marginBottom:8}}>
@@ -804,8 +804,30 @@ function ProgramBuilder({onDone,onBack,customDB}){
 // ══════════════════════════════════════════════════════════════
 //  PROGRAM EDITOR — vue du programme, édition avant entraînement
 // ══════════════════════════════════════════════════════════════
-function ProgramEditor({sessions,program,onEditSession,onStart}){
+function ProgramEditor({sessions,program,onEditSession,onStart,onUpdateSessions}){
   const sd=program&&program.split!=="custom"?SPLITS[program.split]:null;
+  const[showAdd,setShowAdd]=useState(false);
+  const[addName,setAddName]=useState("");
+
+  const moveSession=(idx,dir)=>{
+    const to=idx+dir;
+    if(to<0||to>=sessions.length)return;
+    const a=[...sessions];
+    [a[idx],a[to]]=[a[to],a[idx]];
+    onUpdateSessions(a);
+  };
+  const deleteSession=(id)=>{
+    if(sessions.length<=1)return;
+    if(!window.confirm("Retirer cette séance du programme ?"))return;
+    onUpdateSessions(sessions.filter(s=>s.id!==id));
+  };
+  const addSession=()=>{
+    const nm=addName.trim();
+    if(!nm)return;
+    onUpdateSessions([...sessions,{id:uid(),type:"custom",name:nm,exercises:[]}]);
+    setAddName("");setShowAdd(false);
+  };
+
   return(
     <div style={col({padding:"20px 16px",gap:18,paddingBottom:90})}>
       <div style={{paddingTop:16}}>
@@ -817,23 +839,51 @@ function ProgramEditor({sessions,program,onEditSession,onStart}){
       </div>
       <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:10,padding:"12px 14px"}}>
         <div style={{color:T.muted,fontSize:12,lineHeight:1.7}}>
-          Appuie sur une séance pour modifier les exercices et régler les rep ranges de chaque série. Valide ensuite pour commencer.
+          Appuie sur une séance pour modifier les exercices et régler les rep ranges de chaque série. Utilise les flèches pour changer l'ordre, ✕ pour retirer une séance. Valide ensuite pour commencer.
         </div>
       </div>
       <div style={col({gap:8})}>
-        {sessions.map(s=>(
-          <div key={s.id} onClick={()=>onEditSession(s)} style={{background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:21,fontWeight:700,letterSpacing:1}}>{s.name}</div>
-              <div style={{color:T.muted,fontSize:12,marginTop:2}}>
-                {s.exercises.length} exo(s)
-                {s.exercises.length>0?" · "+s.exercises.slice(0,3).map(e=>(DB[e.muscle]&&DB[e.muscle].label)||e.muscle).filter((v,i,a)=>a.indexOf(v)===i).join(", ")+(s.exercises.length>3?"…":""):""}
-              </div>
+        {sessions.map((s,i)=>(
+          <div key={s.id} style={{display:"flex",gap:6,alignItems:"stretch"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:3,justifyContent:"center",flexShrink:0}}>
+              <button onClick={()=>moveSession(i,-1)} disabled={i===0} style={{background:"none",border:"1px solid "+(i===0?T.border:"#333"),borderRadius:5,color:i===0?T.border:"#888",cursor:i===0?"default":"pointer",fontSize:14,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>↑</button>
+              <button onClick={()=>moveSession(i,1)} disabled={i===sessions.length-1} style={{background:"none",border:"1px solid "+(i===sessions.length-1?T.border:"#333"),borderRadius:5,color:i===sessions.length-1?T.border:"#888",cursor:i===sessions.length-1?"default":"pointer",fontSize:14,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>↓</button>
             </div>
-            <span style={{color:T.muted,fontSize:22}}>›</span>
+            <div onClick={()=>onEditSession(s)} style={{flex:1,background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:21,fontWeight:700,letterSpacing:1}}>{s.name}</div>
+                <div style={{color:T.muted,fontSize:12,marginTop:2}}>
+                  {s.exercises.length} exo(s)
+                  {s.exercises.length>0?" · "+s.exercises.slice(0,3).map(e=>(DB[e.muscle]&&DB[e.muscle].label)||e.muscle).filter((v,i,a)=>a.indexOf(v)===i).join(", ")+(s.exercises.length>3?"…":""):""}
+                </div>
+              </div>
+              <span style={{color:T.muted,fontSize:22}}>›</span>
+            </div>
+            <button onClick={()=>deleteSession(s.id)} style={{background:"none",border:"none",color:sessions.length<=1?T.border:"#FF5555",cursor:sessions.length<=1?"default":"pointer",fontSize:16,padding:"0 4px",flexShrink:0}}>✕</button>
           </div>
         ))}
       </div>
+
+      {showAdd?(
+        <div style={{background:T.card,border:"1px solid "+T.accent,borderRadius:14,padding:16}}>
+          <div style={{color:T.muted,fontSize:11,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Nom de la séance</div>
+          <input
+            value={addName}
+            onChange={e=>setAddName(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")addSession();}}
+            placeholder="Ex: Push, Upper, Jambes…"
+            style={inp({marginBottom:10})}
+            autoFocus
+          />
+          <div style={row({gap:8})}>
+            <Btn onClick={()=>{setShowAdd(false);setAddName("");}} style={{flex:1}}>Annuler</Btn>
+            <Btn active disabled={!addName.trim()} onClick={addSession} style={{flex:1}}>Ajouter ✓</Btn>
+          </div>
+        </div>
+      ):(
+        <button onClick={()=>setShowAdd(true)} style={{background:"none",border:"1px dashed "+T.border,borderRadius:12,color:T.muted,padding:14,cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>+ Ajouter une séance</button>
+      )}
+
       <Btn active onClick={onStart} style={{padding:14,fontSize:15}}>Commencer l'entraînement →</Btn>
     </div>
   );
@@ -913,8 +963,19 @@ function Session({session,week,log,onBack,onSave,customDB}){
     });
   });
   const[showAdd,setShowAdd]=useState(false);
-  const prevLk="w"+(week-1)+"_"+session.id;
-  const prevExes=(week>1&&log[prevLk])||[];
+  // Recherche de la perf précédente par NOM d'exercice (pas par position),
+  // en remontant les semaines précédentes jusqu'à trouver une correspondance.
+  const getPrevForExercise=(ex)=>{
+    const curName=ex.alts&&ex.alts[ex.sel];
+    if(!curName)return null;
+    for(let w=week-1;w>=1;w--){
+      const wkLog=log["w"+w+"_"+session.id];
+      if(!wkLog)continue;
+      const match=wkLog.find(e=>e.alts&&e.alts[e.sel]===curName);
+      if(match&&match.sets&&match.sets.some(s=>s.kg))return match;
+    }
+    return null;
+  };
   useEffect(()=>{onSave(lk,exercises);},[exercises]);
   const updEx=(id,u)=>setExercises(p=>p.map(e=>e.id===id?u:e));
   const delEx=(id)=>setExercises(p=>p.filter(e=>e.id!==id));
@@ -936,7 +997,7 @@ function Session({session,week,log,onBack,onSave,customDB}){
       </div>
       <div style={{padding:16}}>
         {exercises.map((ex,i)=>(
-          <ExCard key={ex.id} ex={ex} prevEx={prevExes[i]} onChange={u=>updEx(ex.id,u)}/>
+          <ExCard key={ex.id} ex={ex} prevEx={getPrevForExercise(ex)} onChange={u=>updEx(ex.id,u)}/>
         ))}
       </div>
     </div>
@@ -1118,7 +1179,7 @@ function App(){
     <div style={{background:T.bg,minHeight:"100vh",fontFamily:"'DM Sans',sans-serif",color:T.text,paddingBottom:state.program&&!hideNav?68:0,maxWidth:600,margin:"0 auto"}}>
       {view==="setup"&&<Setup onDone={handleSetupDone} onCustom={()=>setView("program_builder")}/>}
       {view==="program_builder"&&<ProgramBuilder onDone={handleProgramBuilderDone} onBack={()=>setView("setup")} customDB={state.customDB}/>}
-      {view==="program_editor"&&<ProgramEditor sessions={state.sessions} program={state.program} onEditSession={handleEditSession} onStart={()=>setView("home")}/>}
+      {view==="program_editor"&&<ProgramEditor sessions={state.sessions} program={state.program} onEditSession={handleEditSession} onStart={()=>setView("home")} onUpdateSessions={(newSessions)=>upd({sessions:newSessions})}/>}
       {view==="session_setup"&&editingSession&&<SessionSetup session={editingSession} customDB={state.customDB} onBack={handleSessionSetupBack} freeMode={state.program&&state.program.split==="custom"}/>}
       {view==="home"&&<Home state={state} syncCode={syncCode} setWeek={fn=>upd({week:fn(state.week)})} onOpen={s=>{setActiveSession(s);setIsManual(false);setView("session");}} onManual={()=>{setIsManual(true);setView("session");}} onReset={()=>{upd({...defaults(),customDB:state.customDB});setView("setup");}}/>}
       {view==="session"&&!isManual&&activeSession&&<Session session={activeSession} week={state.week} log={state.log} onBack={()=>setView("home")} onSave={handleSave} customDB={state.customDB}/>}
