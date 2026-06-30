@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Gym Tracker</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=DM+Mono&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#080808;-webkit-tap-highlight-color:transparent}
+    input,select,textarea,button{font-family:inherit}
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-track{background:#080808}
+    ::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+// ══════════════════════════════════════════════════════════════
+//  🔥 FIREBASE CONFIG
+// ══════════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "AlzaSyCGXuP5May27x34atYTb3wdQEp752A1XS0",
+  authDomain:        "mongymtracker.firebaseapp.com",
+  projectId:         "mongymtracker",
+  storageBucket:     "mongymtracker.firebasestorage.app",
+  messagingSenderId: "594357034560",
+  appId:             "1:594357034560:web:347945fcc73ee976bfc9a5",
+  measurementId:     "G-HJR8TBRRNQ"
+};
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ══════════════════════════════════════════════════════════════
+//  DATABASE EXERCICES
+// ══════════════════════════════════════════════════════════════
+const DB = {
+  pectoraux:{ label:"Pectoraux", patterns:{
+    press_h:{ label:"Press horizontal", ex:["Développé couché barre","Développé couché haltères","Développé machine convergente","Dips (pectoraux)","Développé couché câble","Pompes lestées","Pompes","Développé décliné barre","Développé décliné haltères","Développé machine décliné"] },
+    press_i:{ label:"Press incliné", ex:["Développé incliné barre","Développé incliné haltères","Développé machine incliné","Développé landmine unilatéral","Pompes inclinées"] },
+    isol_pec:{ label:"Isolation pectoraux", ex:["Pec deck (butterfly)","Écarté haltères plat","Écarté poulie croisée haute","Écarté poulie croisée basse","Écarté poulie croisée neutre","Fly câble bas vers haut (low to high)","Fly câble neutre croisé","Écarté haltères incliné","Press around câble (around the world)"] }
+  }},
+  dos:{ label:"Dos", patterns:{
+    tir_v:{ label:"Tirage vertical", ex:["Tractions prise large","Tractions prise supination","Tractions prise neutre","Tractions prise serrée","Tirage vertical large","Tirage vertical serrée","Tirage vertical supination","Tirage vertical neutre","Tirage vertical machine"] },
+    tir_h:{ label:"Tirage horizontal (coude serré)", ex:["Rowing haltère unilatéral","Tirage horizontal câble prise neutre","Tirage horizontal machine prise neutre","Rowing poulie basse (V-bar)","Rowing poulie basse prise supination","Seal row banc plat","Meadows row landmine"] },
+    tir_h_large:{ label:"Tirage horizontal coude ouvert (dos/trapèzes/rear delt)", ex:["Rowing barre pronation","Rowing barre supination","T-bar row prise large","Rowing poulie basse prise large","Rowing machine chest supported prise large","Pendlay row","Tirage horizontal câble prise large","Upright row barre","Upright row câble prise large","Face pull câble rotation externe"] },
+    isol_d:{ label:"Isolation dos", ex:["Straight-arm pulldown câble","Pullover machine","Pull-over poulie haute","Pullover haltère"] },
+    lombaires:{ label:"Lombaires / Érecteurs", ex:["Hyperextension (banc romain)","Reverse hyper machine","Good morning barre","Good morning haltères"] }
+  }},
+  epaules_push:{ label:"Épaules (Push)", patterns:{
+    press_ep:{ label:"Press épaules", ex:["Développé militaire barre","Développé militaire haltères","Développé Arnold","Press Arnold câble","Développé machine épaules","Push press barre"] },
+    elev_lat:{ label:"Élévations latérales", ex:["Élévations latérales haltères","Élévations latérales machine","Élévations latérales câble","Élévations latérales incliné câble","Élévations latérales câble croisé bilatéral","Lu raises haltères","Upright row câble prise large","Élévations frontales haltères","Élévations frontales câble"] }
+  }},
+  epaules_pull:{ label:"Arrière épaule / Rotateurs", patterns:{
+    rear_d:{ label:"Arrière épaule / Rotateurs", ex:["Oiseau haltères (rear delt)","Reverse pec deck (rear delt)","Rear delt câble unilatéral","Face pull câble rotation externe","W raises câble (rear delt)","Y raises haltères (rear delt)","T raises haltères (rear delt)","Band pull-apart (rear delt)","Upright row barre","Upright row haltères","Upright row machine","Cuban press barre (rotateurs externes)","Rotation externe câble (coiffe des rotateurs)","Rotation interne câble (coiffe des rotateurs)"] }
+  }},
+  biceps:{ label:"Biceps", patterns:{
+    curl:{ label:"Curl biceps", ex:["Curl haltères incliné","Bayesian curl câble (derrière le corps)","Curl haltères alternés","Curl haltères simultané","Curl préacher barre EZ","Curl préacher machine","Curl Scott câble","Curl spider (banc incliné inversé)","Curl spider câble","Curl barre droite","Curl barre EZ","Drag curl barre","Curl concentration","Curl concentré câble","Curl câble bas (bilatéral)","Curl câble bas (unilatéral)","Curl poulie haute","Curl machine assis"] },
+    curl_m:{ label:"Curl marteau / Brachial", ex:["Curl marteau","Cross body hammer curl","Curl brachialis marteau câble","Curl zottman","Curl reverse barre EZ"] }
+  }},
+  triceps:{ label:"Triceps", patterns:{
+    ext_t:{ label:"Extension triceps", ex:["Skull crusher barre EZ","Skull crusher haltères","Extension triceps derrière la tête","Extension triceps overhead câble","Extension triceps allongé câble unilatéral","Extension triceps machine","JM press","JM press câble","Tate press haltères"] },
+    push_t:{ label:"Pushdown", ex:["Pushdown câble (corde)","Pushdown câble V-bar","Pushdown câble (barre droite)","Extension triceps câble unilatéral","Kickback haltères"] },
+    press_t:{ label:"Press serré", ex:["Développé couché prise serrée","Dips triceps"] }
+  }},
+  quadriceps:{ label:"Quadriceps", patterns:{
+    squat:{ label:"Squat / Leg press", ex:["Squat barre haute","Squat barre basse","Goblet squat haltère","Heel elevated goblet squat","Belt squat","Hack squat machine","Leg press 45°","Leg press unilatéral machine","Pendulum squat machine","Fente barre","Fente haltères","Fente marchée","Step-up barre","Step-up haltères"] },
+    isol_q:{ label:"Isolation quadriceps", ex:["Leg extension machine","Sissy squat","Sissy squat lesté","Spanish squat câble"] }
+  }},
+  ischio:{ label:"Ischio-jambiers", patterns:{
+    hinge:{ label:"Hip hinge", ex:["RDL barre","RDL haltères","B-stance RDL haltères","Deadlift conventionnel","Deadlift sumo","Sumo squat barre","Sumo squat haltère","Good morning barre","Good morning haltères"] },
+    curl_j:{ label:"Curl jambe", ex:["Nordic curl","Leg curl allongé machine","Leg curl assis machine","Leg curl debout unilatéral machine","Leg curl câble debout","Leg curl câble allongé unilatéral","Glute ham raise"] }
+  }},
+  fessiers:{ label:"Fessiers", patterns:{
+    hip_t:{ label:"Hip thrust / Glute bridge", ex:["Hip thrust barre","Hip thrust machine","Hip thrust unilatéral machine","Glute bridge barre","Kick-back fessiers câble"] },
+    unilat:{ label:"Unilatéral fessiers", ex:["Fente bulgare haltères","Fente bulgare barre","Step-up haltères","Step-up barre","Fente marchée","Fente haltères"] },
+    adduct:{ label:"Adducteurs / Abducteurs", ex:["Adducteurs machine assis","Abducteurs machine assis","Adduction câble debout","Adduction câble assis (chaise)","Copenhagen plank"] }
+  }},
+  trapèzes:{ label:"Trapèzes", patterns:{
+    shrugs:{ label:"Shrugs", ex:["Shrugs haltères","Shrugs barre","Shrugs machine","Rack pull barre","Face pull câble","Y raises haltères (trapèzes / rotateurs)","T raises haltères (trapèzes / rear delt)"] }
+  }},
+  mollets:{ label:"Mollets", patterns:{
+    mollet_d:{ label:"Mollets debout (gastrocnémien)", ex:["Mollets debout machine","Mollets haltère unilatéral","Mollets barre debout","Calf raise hack squat machine","Mollets leg press"] },
+    mollet_a:{ label:"Mollets assis (soléaire)", ex:["Mollets assis machine (soléaire)"] },
+    tibia:{ label:"Tibialis", ex:["Mollets tibia (tibialis raise)","Tibialis raise machine"] }
+  }},
+  abdominaux:{ label:"Abdominaux", patterns:{
+    flex:{ label:"Flexion abdominale", ex:["Crunch machine","Crunch câble","Kneeling cable crunch (à genoux)","Crunch décliné machine","Ab wheel","Ab rollout debout","Dragon flag"] },
+    suspend:{ label:"Suspendu / Relevé", ex:["Relevé de jambes suspendu","Toes to bar","L-sit isométrique","Windshield wipers"] },
+    gainage:{ label:"Gainage / Anti-rotation", ex:["Pallof press","Side plank (gainage latéral)","Planche isométrique","Hollow body hold","Rotation russe (Russian twist)","Ab twist câble (obliques)"] }
+  }}
+};
+
+const RR = {
+  press_h:"6-10",press_i:"8-12",isol_pec:"12-20",
+  tir_v:"6-10",tir_h:"8-12",tir_h_large:"8-12",isol_d:"12-20",lombaires:"10-15",
+  press_ep:"8-12",elev_lat:"15-25",rear_d:"12-20",
+  curl:"10-15",curl_m:"10-15",
+  ext_t:"10-15",push_t:"12-20",press_t:"6-10",
+  squat:"6-10",isol_q:"12-20",
+  hinge:"6-10",curl_j:"10-15",
+  hip_t:"8-12",unilat:"8-12",adduct:"15-20",
+  shrugs:"10-15",
+  mollet_d:"10-15",mollet_a:"12-20",tibia:"15-20",
+  flex:"12-20",suspend:"8-15",gainage:"20-40"
+};
+
+const SPLITS = {
+  ppl:{ name:"Push Pull Legs", sub:"3–6 jours · Hypertrophie classique", days:[3,4,5,6],
+    sessions:{
+      push:{name:"Push",muscles:["pectoraux","epaules_push","triceps"]},
+      pull:{name:"Pull",muscles:["dos","biceps"]},
+      legs:{name:"Legs",muscles:["quadriceps","ischio","fessiers"]}
+    },
+    schedules:{ 3:["push","pull","legs"], 4:["push","pull","legs","push"], 5:["push","pull","legs","push","pull"], 6:["push","pull","legs","push","pull","legs"] }
+  },
+  upper_lower:{ name:"Upper / Lower", sub:"4 jours · Force + Hypertrophie", days:[4],
+    sessions:{
+      upper:{name:"Upper",muscles:["pectoraux","dos","epaules_push","biceps","triceps"]},
+      lower:{name:"Lower",muscles:["quadriceps","ischio","fessiers"]}
+    },
+    schedules:{ 4:["upper","lower","upper","lower"] }
+  },
+  full_body:{ name:"Full Body", sub:"2–4 jours · Fréquence maximale", days:[2,3,4],
+    sessions:{ full:{name:"Full Body",muscles:["pectoraux","dos","epaules_push","quadriceps","ischio","biceps","triceps"]} },
+    schedules:{ 2:["full","full"], 3:["full","full","full"], 4:["full","full","full","full"] }
+  },
+  arnold:{ name:"Arnold Split", sub:"6 jours · Volume intense", days:[6],
+    sessions:{
+      cb:{name:"Pec + Dos",muscles:["pectoraux","dos"]},
+      sa:{name:"Épaules + Bras",muscles:["epaules_push","epaules_pull","biceps","triceps"]},
+      legs:{name:"Jambes",muscles:["quadriceps","ischio","fessiers"]}
+    },
+    schedules:{ 6:["cb","sa","legs","cb","sa","legs"] }
+  },
+  bro:{ name:"Bro Split", sub:"5 jours · Un muscle par séance", days:[5],
+    sessions:{
+      chest:{name:"Pectoraux",muscles:["pectoraux"]},
+      back:{name:"Dos + Arrière épaule",muscles:["dos","epaules_pull","trapèzes"]},
+      shoulders:{name:"Épaules",muscles:["epaules_push","epaules_pull"]},
+      arms:{name:"Bras",muscles:["biceps","triceps"]},
+      legs:{name:"Jambes",muscles:["quadriceps","ischio","fessiers"]}
+    },
+    schedules:{ 5:["chest","back","shoulders","arms","legs"] }
+  },
+  push_pull:{ name:"Push / Pull", sub:"2–4 jours · Minimaliste", days:[2,4],
+    sessions:{
+      push:{name:"Push",muscles:["pectoraux","epaules_push","triceps"]},
+      pull:{name:"Pull",muscles:["dos","biceps"]}
+    },
+    schedules:{ 2:["push","pull"], 4:["push","pull","push","pull"] }
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  CONSTANTES
+// ══════════════════════════════════════════════════════════════
+const uid = () => Math.random().toString(36).slice(2,9);
+const COMPOUNDS = ["press_h","press_i","tir_v","tir_h","tir_h_large","press_ep","squat","hinge","hip_t","unilat","press_t","lombaires"];
+const T = {bg:"#080808",surface:"#0f0f0f",card:"#161616",border:"#222",accent:"#C8FF00",text:"#fff",muted:"#555"};
+const defaults = () => ({program:null,sessions:[],log:{},week:1,customDB:{}});
+const SYNC_KEY = "gym_sync_code";
+
+// ══════════════════════════════════════════════════════════════
+//  TYPE D'EXERCICE PAR PATTERN
+//  stretch_iso  = isolation à forte tension d'étirement
+//  stretch_comp = polyarticulaire à forte tension d'étirement
+//  contract_iso = isolation à forte tension de contraction
+//  contract_comp= polyarticulaire à forte tension de contraction
+// ══════════════════════════════════════════════════════════════
+const EX_TYPE = {
+  isol_pec:"stretch_iso",  press_h:"stretch_comp",  press_i:"stretch_comp",
+  isol_d:"stretch_iso",    tir_v:"stretch_comp",    tir_h:"stretch_comp",    tir_h_large:"stretch_comp",
+  elev_lat:"stretch_iso",  rear_d:"contract_iso",   press_ep:"stretch_comp",
+  curl:"stretch_iso",      curl_m:"contract_iso",
+  ext_t:"stretch_iso",     push_t:"contract_iso",   press_t:"stretch_comp",
+  squat:"stretch_comp",    isol_q:"contract_iso",
+  hinge:"stretch_comp",    curl_j:"contract_iso",
+  hip_t:"contract_comp",   unilat:"stretch_comp",
+  shrugs:"contract_iso"
+};
+
+// Options de rep ranges disponibles
+const REP_RANGES = ["4-6","5-8","6-8","6-10","8-10","8-12","10-12","10-15","12-15","12-20","15-20","15-25","20-30"];
+
+// ══════════════════════════════════════════════════════════════
+//  LOGIQUE DE PROGRESSION
+// ══════════════════════════════════════════════════════════════
+function getIncrement(kg){const n=parseFloat(kg)||0;return n<20?1:n<50?2.5:5;}
+
+function getProgression(prev,repRange){
+  if(!prev||!prev.kg||!prev.reps)return null;
+  const[minR,maxR]=(repRange||"8-12").split("-").map(Number);
+  const reps=parseInt(prev.reps)||0,kg=parseFloat(prev.kg)||0;
+  const rir=prev.rir==="échec"?0:(parseInt(prev.rir)||0);
+  const inc=getIncrement(kg);
+  if(reps>=maxR&&rir>=2)return{msg:"↑ Passe à "+(kg+inc)+"kg",skg:kg+inc,color:"#C8FF00"};
+  if(reps>=maxR&&rir>=1)return{msg:"↑ Essaie "+(kg+inc/2)+"kg",skg:kg+inc/2,color:"#9DFF00"};
+  if(reps>=minR&&rir>=1)return{msg:"→ Vise "+maxR+" reps",skg:kg,color:"#FFB800"};
+  if(reps<minR)return{msg:"↓ Réduis à "+Math.max(0,kg-inc)+"kg",skg:Math.max(0,kg-inc),color:"#FF5555"};
+  return{msg:"→ Maintiens",skg:kg,color:"#555"};
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CONSTRUCTION DES EXERCICES (logique mise à jour)
+//  Pour chaque muscle priorisé :
+//    1. isolation à forte tension d'étirement
+//    2. polyarticulaire à forte tension d'étirement
+//    3. (si slot dispo) isolation à forte tension de contraction
+//  Pour les autres muscles : polyarticulaire étirement d'abord
+// ══════════════════════════════════════════════════════════════
+function buildExercises(type,splitDef,priority,count,customDB){
+  customDB=customDB||{};
+  const muscles=splitDef.sessions[type].muscles;
+  const allDB=Object.assign({},DB,customDB);
+
+  // ── Tri : priorisés en tête ──
+  const sorted=[...muscles].sort((a,b)=>{
+    const ai=priority.indexOf(a),bi=priority.indexOf(b);
+    if(ai===-1&&bi===-1)return 0;
+    if(ai===-1)return 1;if(bi===-1)return-1;
+    return ai-bi;
+  });
+
+  const numMuscles=sorted.length;
+  const prioritized=sorted.filter(m=>priority.includes(m));
+
+  // ── Calcul des slots par muscle (distribution par rounds) ──
+  // Round 1 : 1 slot (poly) pour chaque muscle — toujours
+  // Round 2 : 1 slot (iso) pour chaque muscle — si slots disponibles
+  // Round 3+ : slots bonus aux priorisés puis à tous
+  const slotsMap={};
+  sorted.forEach(m=>slotsMap[m]=0);
+  let remaining=count;
+
+  // Round 1 : 1 slot poly pour tous
+  for(const m of sorted){if(remaining>0){slotsMap[m]++;remaining--;}}
+  // Round 2 : 1 slot iso pour tous (ordre : priorisés d'abord)
+  const round2=[...prioritized,...sorted.filter(m=>!prioritized.includes(m))];
+  for(const m of round2){if(remaining>0){slotsMap[m]++;remaining--;}}
+  // Rounds suivants : extras aux priorisés en premier, puis à tous
+  let extraRound=[...prioritized,...sorted];
+  while(remaining>0){
+    let distributed=false;
+    for(const m of extraRound){if(remaining>0){slotsMap[m]++;remaining--;distributed=true;}}
+    if(!distributed)break;
+  }
+
+  // ── Helpers ──
+  const usedP=new Set();
+  const getIso=(m)=>{
+    const pats=(allDB[m]&&allDB[m].patterns)||{};
+    for(const[pk,pd]of Object.entries(pats)){
+      if(!COMPOUNDS.includes(pk)&&!usedP.has(m+"_"+pk))return{m,pk,...pd};
+    }
+    return null;
+  };
+  const getPoly=(m)=>{
+    const pats=(allDB[m]&&allDB[m].patterns)||{};
+    for(const[pk,pd]of Object.entries(pats)){
+      if(COMPOUNDS.includes(pk)&&!usedP.has(m+"_"+pk))return{m,pk,...pd};
+    }
+    return null;
+  };
+  const getAny=(m)=>getPoly(m)||getIso(m);
+
+  const selected=[];
+  const add=(ex)=>{
+    if(!ex||selected.length>=count)return false;
+    usedP.add(ex.m+"_"+ex.pk);
+    selected.push(ex);
+    return true;
+  };
+
+  // ── Construction muscle par muscle ──
+  // Ordre dans la séance : iso d'abord (étirement), puis poly
+  // Mais en distribution des slots : poly garanti en priorité (round 1)
+  // Résultat dans la carte : on trie iso→poly pour l'ordre d'affichage final
+  for(const m of sorted){
+    const slots=slotsMap[m]||1;
+    const exosForMuscle=[];
+    if(slots===1){
+      // 1 seul slot : poly prioritaire (meilleur rapport volume/exercice)
+      const ex=getPoly(m)||getIso(m);
+      if(ex)exosForMuscle.push(ex);
+    } else {
+      // slot 1 : isolation étirement
+      const iso=getIso(m)||getPoly(m);
+      if(iso)exosForMuscle.push(iso);
+      // slot 2 : polyarticulaire
+      const poly=getPoly(m);
+      if(poly)exosForMuscle.push(poly);
+      // slot 3+ : alternance (iso en 3, poly en 4, etc.)
+      for(let s=2;s<slots;s++){
+        const ex=s%2===0?(getIso(m)||getPoly(m)):(getPoly(m)||getIso(m));
+        if(ex)exosForMuscle.push(ex);
+      }
+    }
+    for(const ex of exosForMuscle) add(ex);
+  }
+
+  // ── Remplissage résiduel ──
+  for(const m of sorted){
+    if(selected.length>=count)break;
+    let ex=getAny(m);
+    while(ex&&selected.length<count){add(ex);ex=getAny(m);}
+  }
+
+  return selected.map(p=>({
+    id:uid(),
+    pattern:p.label,
+    muscle:p.m,
+    repRange:RR[p.pk]||"8-12",
+    alts:(p.ex.length>=3?p.ex:[...p.ex,...p.ex]).slice(0,3),
+    sel:0,
+    sets:[1,2,3].map(n=>({id:uid(),n,kg:"",reps:"",rir:"",repRange:RR[p.pk]||"8-12"})),
+    note:""
+  }));
+}
+
+// ══════════════════════════════════════════════════════════════
+//  FIREBASE
+// ══════════════════════════════════════════════════════════════
+async function fbSave(code,data){
+  try{await db.collection("trackers").doc(code).set({data:JSON.stringify(data),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}
+  catch(e){console.error("Save error:",e);}
+}
+async function fbLoad(code){
+  try{const doc=await db.collection("trackers").doc(code).get();return doc.exists?JSON.parse(doc.data().data):null;}
+  catch(e){console.error("Load error:",e);return null;}
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HELPERS STYLE
+// ══════════════════════════════════════════════════════════════
+const col=(e={})=>({display:"flex",flexDirection:"column",...e});
+const row=(e={})=>({display:"flex",alignItems:"center",...e});
+const inp=(e={})=>({background:T.card,border:"1px solid "+T.border,borderRadius:6,color:T.text,padding:"8px 10px",fontFamily:"'DM Mono',monospace",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box",...e});
+
+// ══════════════════════════════════════════════════════════════
+//  COMPOSANT BTN
+// ══════════════════════════════════════════════════════════════
+function Btn({active,children,style,disabled,...p}){
+  style=style||{};
+  return React.createElement("button",{...p,disabled,style:{background:active?T.accent:"transparent",color:active?"#000":T.text,border:"1px solid "+(active?T.accent:T.border),borderRadius:8,padding:"10px 18px",cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",fontSize:14,fontWeight:600,opacity:disabled?0.4:1,...style}},children);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SYNC SCREEN
+// ══════════════════════════════════════════════════════════════
+function SyncScreen({onSync}){
+  const[code,setCode]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[error,setError]=useState("");
+  const handleSync=async()=>{
+    const trimmed=code.trim().toLowerCase().replace(/\s+/g,"_");
+    if(trimmed.length<4){setError("Code trop court (min 4 caractères)");return;}
+    setLoading(true);setError("");
+    const data=await fbLoad(trimmed);
+    localStorage.setItem(SYNC_KEY,trimmed);
+    onSync(trimmed,data);
+    setLoading(false);
+  };
+  return(
+    <div style={col({minHeight:"100vh",alignItems:"center",justifyContent:"center",padding:28,gap:24})}>
+      <div style={col({alignItems:"center",gap:8})}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:44,fontWeight:900,letterSpacing:4,color:T.accent,lineHeight:1}}>GYM TRACKER</div>
+        <div style={{color:T.muted,fontSize:14,textAlign:"center",maxWidth:280,lineHeight:1.6}}>Entre ton code de synchronisation pour accéder à tes données sur tous tes appareils</div>
+      </div>
+      <div style={col({gap:10,width:"100%",maxWidth:320})}>
+        <input value={code} onChange={e=>setCode(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSync()} placeholder="Ex: clement_gym_2025" style={inp({fontSize:17,padding:"13px 14px",textAlign:"center",letterSpacing:1})} autoFocus/>
+        {error&&<div style={{color:"#FF5555",fontSize:12,textAlign:"center"}}>{error}</div>}
+        <Btn active onClick={handleSync} disabled={loading||code.trim().length<4} style={{padding:14,fontSize:16}}>{loading?"Chargement...":"Accéder →"}</Btn>
+      </div>
+      <div style={{color:"#333",fontSize:12,textAlign:"center",maxWidth:280,lineHeight:1.7,borderTop:"1px solid #1a1a1a",paddingTop:20}}>
+        Première fois ? Invente un code unique.<br/>Même code sur tous tes appareils = mêmes données.
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  FREE EX PICKER — sélection libre parmi tous les exercices
+//  (utilisé dans la création de zéro)
+// ══════════════════════════════════════════════════════════════
+function FreeExPicker({customDB,onPick,onClose}){
+  const[search,setSearch]=useState("");
+  const[selectedMuscle,setSelectedMuscle]=useState(null);
+  const allDB=Object.assign({},DB,customDB);
+
+  // Construire la liste plate de tous les exercices
+  const allExs=Object.entries(allDB).flatMap(([mk,mv])=>
+    Object.entries(mv.patterns||{}).flatMap(([pk,pd])=>
+      pd.ex.map(exName=>({mk,pk,pd,mv,exName}))
+    )
+  );
+
+  const filtered=search.length>1
+    ?allExs.filter(e=>e.exName.toLowerCase().includes(search.toLowerCase()))
+    :selectedMuscle
+      ?allExs.filter(e=>e.mk===selectedMuscle)
+      :null;
+
+  return(
+    <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:16}}>
+      <div style={row({justifyContent:"space-between",marginBottom:10})}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:700,letterSpacing:1}}>Ajouter un exercice</div>
+        {onClose&&<button onClick={onClose} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:20}}>✕</button>}
+      </div>
+      <input
+        value={search}
+        onChange={e=>setSearch(e.target.value)}
+        placeholder="🔍 Rechercher..."
+        style={inp({marginBottom:10,fontSize:14})}
+        autoFocus
+      />
+      {!search&&(
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+          <div onClick={()=>setSelectedMuscle(null)} style={{padding:"5px 10px",borderRadius:20,border:"1px solid "+(selectedMuscle===null?T.accent:T.border),background:selectedMuscle===null?"rgba(200,255,0,0.07)":"transparent",cursor:"pointer",fontSize:12,color:selectedMuscle===null?T.accent:T.muted}}>Tous</div>
+          {Object.entries(allDB).map(([mk,mv])=>(
+            <div key={mk} onClick={()=>setSelectedMuscle(selectedMuscle===mk?null:mk)} style={{padding:"5px 10px",borderRadius:20,border:"1px solid "+(selectedMuscle===mk?T.accent:T.border),background:selectedMuscle===mk?"rgba(200,255,0,0.07)":"transparent",cursor:"pointer",fontSize:12,color:selectedMuscle===mk?T.accent:T.muted}}>{mv.label}</div>
+          ))}
+        </div>
+      )}
+      <div style={{maxHeight:300,overflowY:"auto"}}>
+        {filtered?filtered.map(({mk,pk,pd,mv,exName},i)=>(
+          <div key={i} onClick={()=>onPick(mk,pk,pd,exName)} style={{padding:"9px 12px",borderRadius:8,cursor:"pointer",border:"1px solid "+T.border,fontSize:14,marginBottom:5,background:T.surface}}>
+            <div>{exName}</div>
+            <div style={{color:T.muted,fontSize:11,marginTop:2}}>{mv.label} · {pd.label}</div>
+          </div>
+        )):(
+          <div style={{color:T.muted,fontSize:13,textAlign:"center",padding:"20px 0"}}>
+            Sélectionne un groupe musculaire ou tape le nom d'un exercice
+          </div>
+        )}
+        {filtered&&filtered.length===0&&<div style={{color:T.muted,textAlign:"center",padding:16}}>Aucun résultat</div>}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  EXPICKER
+// ══════════════════════════════════════════════════════════════
+function ExPicker({customDB,onPick,onClose}){
+  const[m,setM]=useState(null);
+  const[p,setP]=useState(null);
+  const allDB=Object.assign({},DB,customDB);
+  return(
+    <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:14,padding:16}}>
+      <div style={row({justifyContent:"space-between",marginBottom:12})}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:700,letterSpacing:1}}>{!m?"Groupe musculaire":!p?"Pattern":"Exercice"}</div>
+        {onClose&&<button onClick={onClose} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:20}}>✕</button>}
+      </div>
+      {m&&<button onClick={()=>{setM(null);setP(null);}} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:13,fontFamily:"inherit",padding:"0 0 10px",display:"block"}}>← Retour</button>}
+      {!m&&Object.entries(allDB).map(([mk,mv])=>(
+        <div key={mk} onClick={()=>setM(mk)} style={{padding:"10px 14px",background:T.surface,borderRadius:8,cursor:"pointer",border:"1px solid "+T.border,fontSize:14,marginBottom:6}}>{mv.label}</div>
+      ))}
+      {m&&!p&&Object.entries((allDB[m]&&allDB[m].patterns)||{}).map(([pk,pd])=>(
+        <div key={pk} onClick={()=>setP({pk,pd})} style={{padding:"10px 14px",background:T.surface,borderRadius:8,cursor:"pointer",border:"1px solid "+T.border,fontSize:14,marginBottom:6}}>{pd.label}</div>
+      ))}
+      {m&&p&&p.pd.ex.slice(0,8).map(exName=>(
+        <div key={exName} onClick={()=>onPick(m,p.pk,p.pd,exName)} style={{padding:"10px 14px",background:T.surface,borderRadius:8,cursor:"pointer",border:"1px solid "+T.border,fontSize:14,marginBottom:6}}>{exName}</div>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  EXCARD — mode setup : rep ranges par série (sans kg/reps)
+//          mode log    : kg/reps/rir + repRange affiché
+// ══════════════════════════════════════════════════════════════
+function ExCard({ex,prevEx,onChange,onRemove,setupMode}){
+  const[open,setOpen]=useState(true);
+  const updSet=(sid,f,v)=>onChange({...ex,sets:ex.sets.map(s=>s.id===sid?{...s,[f]:v}:s)});
+  const addSet=()=>onChange({...ex,sets:[...ex.sets,{id:uid(),n:ex.sets.length+1,kg:"",reps:"",rir:"",repRange:ex.repRange||"8-12"}]});
+  const delSet=(sid)=>{if(ex.sets.length<=1)return;onChange({...ex,sets:ex.sets.filter(s=>s.id!==sid).map((s,i)=>({...s,n:i+1}))});};
+
+  return(
+    <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:14,overflow:"hidden",marginBottom:12}}>
+      {/* EN-TÊTE */}
+      <div onClick={()=>setOpen(o=>!o)} style={{padding:"14px 16px",cursor:"pointer"}}>
+        <div style={row({justifyContent:"space-between"})}>
+          <div style={col({gap:3})}>
+            <div style={{color:T.muted,fontSize:11,textTransform:"uppercase",letterSpacing:1}}>{ex.pattern} · {(DB[ex.muscle]&&DB[ex.muscle].label)||ex.muscle}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:21,fontWeight:700,letterSpacing:0.5}}>{ex.alts[ex.sel]}</div>
+            {setupMode&&<div style={{color:"#444",fontSize:11,marginTop:1}}>Appuie pour configurer les séries</div>}
+          </div>
+          <div style={row({gap:8})}>
+            {onRemove&&<button onClick={e=>{e.stopPropagation();onRemove();}} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:16,padding:4}}>✕</button>}
+            <span style={{color:T.muted}}>{open?"↑":"↓"}</span>
+          </div>
+        </div>
+      </div>
+
+      {open&&(
+        <div style={{padding:"0 16px 16px",borderTop:"1px solid "+T.border}}>
+          {/* CHOIX D'EXERCICE — uniquement en mode setup si plusieurs alternatives */}
+          {setupMode&&ex.alts.length>1&&(
+          <div style={col({gap:6,paddingTop:12,marginBottom:14})}>
+            <div style={{color:T.muted,fontSize:11,textTransform:"uppercase",letterSpacing:1}}>Choix d'exercice</div>
+            {ex.alts.map((a,i)=>(
+              <div key={i} onClick={()=>onChange({...ex,sel:i})} style={{padding:"8px 12px",borderRadius:8,cursor:"pointer",background:ex.sel===i?"rgba(200,255,0,0.07)":"transparent",border:"1px solid "+(ex.sel===i?T.accent:T.border),fontSize:14,display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:13,height:13,borderRadius:"50%",border:"2px solid "+(ex.sel===i?T.accent:T.muted),background:ex.sel===i?T.accent:"transparent",flexShrink:0}}/>
+                {a}
+              </div>
+            ))}
+          </div>
+          )}
+
+          {/* ── MODE SETUP : rep range par série ── */}
+          {setupMode&&(
+            <>
+              <div style={row({justifyContent:"space-between",paddingBottom:8,borderBottom:"1px solid "+T.border,marginBottom:8})}>
+                <div style={{color:T.muted,fontSize:10,textTransform:"uppercase",letterSpacing:1,width:28,textAlign:"center"}}>#</div>
+                <div style={{color:T.muted,fontSize:10,textTransform:"uppercase",letterSpacing:1,flex:1,paddingLeft:8}}>REP RANGE</div>
+                <div style={{width:28}}></div>
+              </div>
+              {ex.sets.map((s)=>{
+                const setRR=s.repRange||ex.repRange||"8-12";
+                return(
+                  <div key={s.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 28px",gap:6,alignItems:"center",marginBottom:8}}>
+                    <div style={{color:T.muted,fontSize:12,textAlign:"center",fontFamily:"'DM Mono',monospace"}}>S{s.n}</div>
+                    <select value={setRR} onChange={e=>updSet(s.id,"repRange",e.target.value)} style={inp({padding:"8px 10px",cursor:"pointer"})}>
+                      {REP_RANGES.map(r=><option key={r} value={r}>{r} reps</option>)}
+                    </select>
+                    <button onClick={()=>delSet(s.id)} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:14,padding:0,textAlign:"center"}}>✕</button>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {/* ── MODE LOG : kg / reps / rir avec repRange affiché ── */}
+          {!setupMode&&(
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"58px 1fr 1fr 80px 22px",gap:6,paddingBottom:6,borderBottom:"1px solid "+T.border,marginBottom:6}}>
+                {["SÉRIE","KG","REPS","RIR",""].map((h,i)=><div key={i} style={{color:T.muted,fontSize:10,textTransform:"uppercase",letterSpacing:1,textAlign:"center"}}>{h}</div>)}
+              </div>
+              {ex.sets.map((s,si)=>{
+                const setRR=s.repRange||ex.repRange||"8-12";
+                const prev=prevEx&&prevEx.sets&&prevEx.sets[si];
+                const prog=prev?getProgression(prev,setRR):null;
+                return(
+                  <div key={s.id} style={{marginBottom:8}}>
+                    <div style={{display:"grid",gridTemplateColumns:"58px 1fr 1fr 80px 22px",gap:6,alignItems:"center"}}>
+                      <div style={col({alignItems:"center",gap:1})}>
+                        <div style={{color:T.muted,fontSize:12,fontFamily:"'DM Mono',monospace"}}>S{s.n}</div>
+                        <div style={{color:T.accent,fontSize:10,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{setRR}</div>
+                      </div>
+                      <input type="number" placeholder={prog?String(prog.skg):"—"} value={s.kg} onChange={e=>updSet(s.id,"kg",e.target.value)} style={inp({textAlign:"center",padding:"7px 4px"})}/>
+                      <input type="number" placeholder="—" value={s.reps} onChange={e=>updSet(s.id,"reps",e.target.value)} style={inp({textAlign:"center",padding:"7px 4px"})}/>
+                      <select value={s.rir} onChange={e=>updSet(s.id,"rir",e.target.value)} style={inp({padding:"7px 4px",cursor:"pointer"})}>
+                        <option value="">—</option>
+                        {["0","1","2","3","4","échec"].map(r=><option key={r} value={r}>{r==="échec"?"Échec":r+" RIR"}</option>)}
+                      </select>
+                      {setupMode&&<button onClick={()=>delSet(s.id)} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:14,padding:0}}>✕</button>}
+                    </div>
+                    {prog&&<div style={{marginTop:3,paddingLeft:34,fontSize:11,fontWeight:600,color:prog.color}}>{prog.msg}</div>}
+                    {prev&&prev.kg&&<div style={{marginTop:1,paddingLeft:34,fontSize:11,color:T.muted}}>Préc: {prev.kg}kg × {prev.reps} reps{prev.rir?" · "+prev.rir+" RIR":""}</div>}
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {setupMode&&<button onClick={addSet} style={{background:"none",border:"1px dashed "+T.border,borderRadius:8,color:T.muted,padding:"7px 0",cursor:"pointer",fontSize:13,fontFamily:"inherit",width:"100%",marginTop:4}}>+ Série</button>}
+          <div style={col({gap:5,marginTop:12})}>
+            <div style={{color:T.muted,fontSize:11,textTransform:"uppercase",letterSpacing:1}}>Note / Ressenti</div>
+            <textarea value={ex.note} onChange={e=>onChange({...ex,note:e.target.value})} placeholder="Ressenti, douleur, fatigue..." style={{...inp(),resize:"vertical",minHeight:50,fontFamily:"'DM Sans',sans-serif",fontSize:13,padding:8}}/>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SETUP — étape 0 : choix du split + option "de zéro"
+// ══════════════════════════════════════════════════════════════
+function Setup({onDone,onCustom}){
+  const[step,setStep]=useState(0);
+  const[d,setD]=useState({split:null,days:null,exCount:5,priority:[]});
+  const set=(k,v)=>setD(p=>({...p,[k]:v}));
+  const toggleP=(m)=>setD(p=>({...p,priority:p.priority.includes(m)?p.priority.filter(x=>x!==m):[...p.priority,m]}));
+  const sd=d.split?SPLITS[d.split]:null;
+  const canNext=[d.split!==null,d.days!==null,true][step];
+  return(
+    <div style={col({minHeight:"100vh",padding:"20px 16px",gap:20})}>
+      <div style={{paddingTop:16}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:34,fontWeight:900,letterSpacing:3,color:T.accent,lineHeight:1}}>NOUVEAU PROGRAMME</div>
+        <div style={{color:T.muted,fontSize:13,marginTop:4}}>{["Choisis ton split","Configure","Priorités musculaires"][step]}</div>
+      </div>
+      <div style={row({gap:6})}>
+        {[0,1,2].map(i=><div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=step?T.accent:T.border}}/>)}
+      </div>
+
+      {step===0&&(
+        <div style={col({gap:8})}>
+          {Object.entries(SPLITS).map(([k,s])=>(
+            <div key={k} onClick={()=>set("split",k)} style={{background:d.split===k?"rgba(200,255,0,0.07)":T.card,border:"1px solid "+(d.split===k?T.accent:T.border),borderRadius:12,padding:"15px 16px",cursor:"pointer"}}>
+              <div style={row({justifyContent:"space-between"})}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:700,letterSpacing:1}}>{s.name}</div>
+                {d.split===k&&<span style={{color:T.accent}}>✓</span>}
+              </div>
+              <div style={{color:T.muted,fontSize:12,marginTop:2}}>{s.sub}</div>
+            </div>
+          ))}
+          {/* OPTION DE ZÉRO */}
+          <div onClick={onCustom} style={{background:"transparent",border:"1px dashed "+T.border,borderRadius:12,padding:"15px 16px",cursor:"pointer",marginTop:4}}>
+            <div style={row({justifyContent:"space-between"})}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:700,letterSpacing:1,color:T.muted}}>Créer de zéro</div>
+              <span style={{color:T.muted,fontSize:18}}>→</span>
+            </div>
+            <div style={{color:"#333",fontSize:12,marginTop:2}}>Programme 100% personnalisé</div>
+          </div>
+        </div>
+      )}
+
+      {step===1&&sd&&(
+        <div style={col({gap:18})}>
+          <div style={col({gap:8})}>
+            <div style={{color:T.muted,fontSize:11,textTransform:"uppercase",letterSpacing:1}}>Jours/semaine</div>
+            <div style={row({gap:8,flexWrap:"wrap"})}>{sd.days.map(n=><Btn key={n} active={d.days===n} onClick={()=>set("days",n)} style={{width:50,height:50,padding:0,fontSize:18,borderRadius:10}}>{n}</Btn>)}</div>
+          </div>
+          <div style={col({gap:8})}>
+            <div style={{color:T.muted,fontSize:11,textTransform:"uppercase",letterSpacing:1}}>Exercices/séance</div>
+            <div style={row({gap:8,flexWrap:"wrap"})}>{[4,5,6,7,8].map(n=><Btn key={n} active={d.exCount===n} onClick={()=>set("exCount",n)} style={{width:50,height:50,padding:0,fontSize:18,borderRadius:10}}>{n}</Btn>)}</div>
+          </div>
+          {d.days&&(
+            <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:10,padding:14}}>
+              <div style={{color:T.muted,fontSize:11,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Aperçu</div>
+              {sd.schedules[d.days].map((t,i)=>(
+                <div key={i} style={row({gap:10,padding:"4px 0",borderBottom:i<sd.schedules[d.days].length-1?"1px solid "+T.border:"none"})}>
+                  <div style={{color:T.muted,fontSize:12,width:22}}>J{i+1}</div>
+                  <div style={{fontSize:14}}>{sd.sessions[t].name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {step===2&&(
+        <div style={col({gap:10})}>
+          <div style={{color:T.muted,fontSize:13,lineHeight:1.6}}>Muscles à prioriser — pour chaque muscle priorisé, la séance commencera par une isolation étirement puis un polyarticulaire étirement.</div>
+          {Object.entries(DB).map(([k,v])=>{
+            const idx=d.priority.indexOf(k);const sel=idx!==-1;
+            return(
+              <div key={k} onClick={()=>toggleP(k)} style={{background:sel?"rgba(200,255,0,0.06)":T.card,border:"1px solid "+(sel?T.accent:T.border),borderRadius:10,padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{fontSize:15}}>{v.label}</div>
+                {sel&&<div style={{background:T.accent,color:"#000",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700}}>{idx+1}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={row({gap:8,marginTop:"auto",paddingBottom:20})}>
+        {step>0&&<Btn onClick={()=>setStep(s=>s-1)} style={{flex:1}}>← Retour</Btn>}
+        {step<2
+          ?<Btn active onClick={()=>setStep(s=>s+1)} disabled={!canNext} style={{flex:1}}>Suivant →</Btn>
+          :<Btn active onClick={()=>onDone(d)} style={{flex:1}}>Générer ✓</Btn>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SESSION SETUP — édition des exercices & rep ranges d'une séance
+// ══════════════════════════════════════════════════════════════
+function SessionSetup({session,customDB,onBack,freeMode}){
+  const[exercises,setExercises]=useState(()=>session.exercises.map(e=>({...e,sets:e.sets.map(s=>({...s}))})));
+  const[showAdd,setShowAdd]=useState(session.exercises.length===0);
+  const updEx=(id,u)=>setExercises(p=>p.map(e=>e.id===id?u:e));
+  const delEx=(id)=>setExercises(p=>p.filter(e=>e.id!==id));
+  // Toujours FreeExPicker : choix libre parmi tous les exercices, quel que soit le mode
+  const addEx=(mk,pk,pd,exName)=>{
+    setExercises(p=>[...p,{id:uid(),pattern:pd.label,muscle:mk,repRange:RR[pk]||"8-12",alts:[exName],sel:0,sets:[1,2,3].map(n=>({id:uid(),n,kg:"",reps:"",rir:"",repRange:RR[pk]||"8-12"})),note:""}]);
+    setShowAdd(false);
+  };
+  const moveEx=(idx,dir)=>setExercises(p=>{
+    const a=[...p];
+    const to=idx+dir;
+    if(to<0||to>=a.length)return a;
+    [a[idx],a[to]]=[a[to],a[idx]];
+    return a;
+  });
+  return(
+    <div style={col({paddingBottom:80})}>
+      <div style={{padding:"18px 16px 14px",background:T.surface,borderBottom:"1px solid "+T.border,position:"sticky",top:0,zIndex:10}}>
+        <div style={row({gap:12})}>
+          <button onClick={()=>onBack({...session,exercises})} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:26,padding:0,lineHeight:1}}>‹</button>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,letterSpacing:1,lineHeight:1}}>{session.name}</div>
+            <div style={{color:T.muted,fontSize:12}}>Exercices · Rep ranges par série</div>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:16}}>
+        {exercises.map((ex,i)=>(
+          <div key={ex.id} style={{display:"flex",gap:6,alignItems:"flex-start",marginBottom:12}}>
+            {/* Flèches de réordonnancement */}
+            <div style={{display:"flex",flexDirection:"column",gap:3,paddingTop:14,flexShrink:0}}>
+              <button onClick={()=>moveEx(i,-1)} disabled={i===0} style={{background:"none",border:"1px solid "+(i===0?T.border:"#333"),borderRadius:5,color:i===0?T.border:"#888",cursor:i===0?"default":"pointer",fontSize:14,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>↑</button>
+              <button onClick={()=>moveEx(i,1)} disabled={i===exercises.length-1} style={{background:"none",border:"1px solid "+(i===exercises.length-1?T.border:"#333"),borderRadius:5,color:i===exercises.length-1?T.border:"#888",cursor:i===exercises.length-1?"default":"pointer",fontSize:14,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>↓</button>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <ExCard ex={ex} setupMode={true} onChange={u=>updEx(ex.id,u)} onRemove={()=>delEx(ex.id)}/>
+            </div>
+          </div>
+        ))}
+        {!showAdd
+          ?<button onClick={()=>setShowAdd(true)} style={{background:"none",border:"1px dashed "+T.border,borderRadius:12,color:T.muted,padding:14,cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%"}}>+ Ajouter un exercice</button>
+          :<FreeExPicker customDB={customDB} onPick={addEx} onClose={exercises.length>0?()=>setShowAdd(false):undefined}/>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PROGRAM BUILDER — création de zéro
+// ══════════════════════════════════════════════════════════════
+function ProgramBuilder({onDone,onBack,customDB}){
+  const[sessions,setSessions]=useState([]);
+  const[editSession,setEditSession]=useState(null);
+  const[addName,setAddName]=useState("");
+  const[showAdd,setShowAdd]=useState(false);
+
+  const saveSession=(updated)=>{
+    setSessions(s=>s.map(sess=>sess.id===updated.id?updated:sess));
+    setEditSession(null);
+  };
+
+  if(editSession){
+    return <SessionSetup session={editSession} customDB={customDB} onBack={saveSession} freeMode={true}/>;
+  }
+
+  return(
+    <div style={col({minHeight:"100vh",padding:"20px 16px",gap:16})}>
+      <div style={{paddingTop:16}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:14,fontFamily:"inherit",padding:"0 0 12px",display:"block"}}>← Retour</button>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:34,fontWeight:900,letterSpacing:3,color:T.accent,lineHeight:1}}>DE ZÉRO</div>
+        <div style={{color:T.muted,fontSize:13,marginTop:4}}>Crée tes séances librement</div>
+      </div>
+
+      <div style={col({gap:8})}>
+        {sessions.map((s)=>(
+          <div key={s.id} style={{background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"15px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div onClick={()=>setEditSession(s)} style={{flex:1,cursor:"pointer"}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:21,fontWeight:700,letterSpacing:1}}>{s.name}</div>
+              <div style={{color:T.muted,fontSize:12,marginTop:2}}>{s.exercises.length} exercice(s) {s.exercises.length>0?"· "+s.exercises.slice(0,2).map(e=>(DB[e.muscle]&&DB[e.muscle].label)||e.muscle).filter((v,i,a)=>a.indexOf(v)===i).join(", "):""}</div>
+            </div>
+            <div style={row({gap:10})}>
+              <button onClick={()=>setEditSession(s)} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>Éditer ›</button>
+              <button onClick={()=>setSessions(ss=>ss.filter(x=>x.id!==s.id))} style={{background:"none",border:"none",color:"#FF5555",cursor:"pointer",fontSize:16,padding:4}}>✕</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showAdd?(
+        <div style={{background:T.card,border:"1px solid "+T.accent,borderRadius:14,padding:16}}>
+          <div style={{color:T.muted,fontSize:11,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Nom de la séance</div>
+          <input
+            value={addName}
+            onChange={e=>setAddName(e.target.value)}
+            onKeyDown={e=>{
+              if(e.key==="Enter"&&addName.trim()){
+                setSessions(s=>[...s,{id:uid(),name:addName.trim(),type:"custom",exercises:[]}]);
+                setAddName("");setShowAdd(false);
+              }
+            }}
+            placeholder="Ex: Push, Upper, Jambes…"
+            style={inp({marginBottom:10})}
+            autoFocus
+          />
+          <div style={row({gap:8})}>
+            <Btn onClick={()=>{setShowAdd(false);setAddName("");}} style={{flex:1}}>Annuler</Btn>
+            <Btn active disabled={!addName.trim()} onClick={()=>{if(!addName.trim())return;setSessions(s=>[...s,{id:uid(),name:addName.trim(),type:"custom",exercises:[]}]);setAddName("");setShowAdd(false);}} style={{flex:1}}>Ajouter ✓</Btn>
+          </div>
+        </div>
+      ):(
+        <button onClick={()=>setShowAdd(true)} style={{background:"none",border:"1px dashed "+T.border,borderRadius:12,color:T.muted,padding:14,cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>+ Nouvelle séance</button>
+      )}
+
+      <div style={{marginTop:"auto",paddingBottom:24}}>
+        <Btn active disabled={sessions.length===0} onClick={()=>onDone(sessions)} style={{width:"100%",padding:14,fontSize:16}}>Valider le programme ✓</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PROGRAM EDITOR — vue du programme, édition avant entraînement
+// ══════════════════════════════════════════════════════════════
+function ProgramEditor({sessions,program,onEditSession,onStart}){
+  const sd=program&&program.split!=="custom"?SPLITS[program.split]:null;
+  return(
+    <div style={col({padding:"20px 16px",gap:18,paddingBottom:90})}>
+      <div style={{paddingTop:16}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:32,fontWeight:900,letterSpacing:3,color:T.accent,lineHeight:1}}>MON PROGRAMME</div>
+        <div style={{color:T.muted,fontSize:12,marginTop:2}}>
+          {sd?sd.name:"Programme personnalisé"}
+          {program&&program.days?" · "+program.days+"j/sem":""}
+        </div>
+      </div>
+      <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:10,padding:"12px 14px"}}>
+        <div style={{color:T.muted,fontSize:12,lineHeight:1.7}}>
+          Appuie sur une séance pour modifier les exercices et régler les rep ranges de chaque série. Valide ensuite pour commencer.
+        </div>
+      </div>
+      <div style={col({gap:8})}>
+        {sessions.map(s=>(
+          <div key={s.id} onClick={()=>onEditSession(s)} style={{background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:21,fontWeight:700,letterSpacing:1}}>{s.name}</div>
+              <div style={{color:T.muted,fontSize:12,marginTop:2}}>
+                {s.exercises.length} exo(s)
+                {s.exercises.length>0?" · "+s.exercises.slice(0,3).map(e=>(DB[e.muscle]&&DB[e.muscle].label)||e.muscle).filter((v,i,a)=>a.indexOf(v)===i).join(", ")+(s.exercises.length>3?"…":""):""}
+              </div>
+            </div>
+            <span style={{color:T.muted,fontSize:22}}>›</span>
+          </div>
+        ))}
+      </div>
+      <Btn active onClick={onStart} style={{padding:14,fontSize:15}}>Commencer l'entraînement →</Btn>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HOME — page d'accueil pour logger les séances
+// ══════════════════════════════════════════════════════════════
+function Home({state,onOpen,onManual,onReset,setWeek,syncCode}){
+  const{program,sessions,log,week}=state;
+  if(!program)return null;
+  const sd=program.split!=="custom"?SPLITS[program.split]:null;
+  const done=(s)=>!!log["w"+week+"_"+s.id];
+  return(
+    <div style={col({padding:"20px 16px",gap:18})}>
+      <div style={row({justifyContent:"space-between",paddingTop:16})}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:32,fontWeight:900,letterSpacing:3,color:T.accent,lineHeight:1}}>GYM TRACKER</div>
+          <div style={{color:T.muted,fontSize:12,marginTop:2}}>{sd?sd.name:"Programme personnalisé"} · <span style={{color:"#383838"}}>#{syncCode}</span></div>
+        </div>
+        <button onClick={()=>{if(window.confirm("Réinitialiser le programme ?"))onReset();}} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>⚙ Reset</button>
+      </div>
+      <div style={{background:T.card,border:"1px solid "+T.border,borderRadius:12,padding:"14px 18px"}}>
+        <div style={row({justifyContent:"space-between",alignItems:"center"})}>
+          <button onClick={()=>setWeek(w=>Math.max(1,w-1))} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:28,lineHeight:1,padding:"0 4px"}}>‹</button>
+          <div style={col({alignItems:"center",gap:2})}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:30,fontWeight:800,letterSpacing:3}}>SEMAINE {week}</div>
+            <div style={{color:T.muted,fontSize:12}}>
+              {program.days}j/sem{program.exCount>0?" · "+program.exCount+" exos/séance":""}
+            </div>
+          </div>
+          <button onClick={()=>setWeek(w=>w+1)} style={{background:"none",border:"none",color:T.accent,cursor:"pointer",fontSize:28,lineHeight:1,padding:"0 4px"}}>›</button>
+        </div>
+      </div>
+      <div style={col({gap:8})}>
+        <div style={{color:T.muted,fontSize:11,textTransform:"uppercase",letterSpacing:1}}>Séances</div>
+        {sessions.map(s=>(
+          <div key={s.id} onClick={()=>onOpen(s)} style={{background:done(s)?"rgba(200,255,0,0.04)":T.card,border:"1px solid "+(done(s)?"rgba(200,255,0,0.25)":T.border),borderRadius:12,padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:21,fontWeight:700,letterSpacing:1}}>{s.name}</div>
+              <div style={{color:T.muted,fontSize:12,marginTop:2}}>
+                {sd&&sd.sessions[s.type]
+                  ?sd.sessions[s.type].muscles.map(m=>DB[m]&&DB[m].label).join(", ")
+                  :s.exercises.map(e=>(DB[e.muscle]&&DB[e.muscle].label)||e.muscle).filter((v,i,a)=>a.indexOf(v)===i).join(", ")||"Séance personnalisée"
+                }
+              </div>
+            </div>
+            <div style={row({gap:10})}>
+              {done(s)&&<span style={{color:T.accent,fontSize:12,fontWeight:700}}>✓ FAIT</span>}
+              <span style={{color:T.muted,fontSize:22}}>›</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button onClick={onManual} style={{background:"none",border:"1px dashed "+T.border,borderRadius:12,color:T.muted,padding:14,cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>+ Séance libre</button>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SESSION — logging des perfs
+// ══════════════════════════════════════════════════════════════
+function Session({session,week,log,onBack,onSave,customDB}){
+  const lk="w"+week+"_"+session.id;
+  const[exercises,setExercises]=useState(()=>{
+    const saved=log[lk];
+    // Aligner les séries du log sur la structure actuelle de la séance
+    return session.exercises.map(refEx=>{
+      const logEx=saved&&saved.find(e=>e.id===refEx.id);
+      if(!logEx)return{...refEx,sets:refEx.sets.map(s=>({...s}))};
+      // Garder uniquement les séries qui existent dans la définition actuelle
+      const alignedSets=refEx.sets.map(refSet=>{
+        const logSet=logEx.sets&&logEx.sets.find(s=>s.id===refSet.id);
+        return logSet?{...refSet,...logSet}:{...refSet};
+      });
+      return{...logEx,sets:alignedSets};
+    });
+  });
+  const[showAdd,setShowAdd]=useState(false);
+  const prevLk="w"+(week-1)+"_"+session.id;
+  const prevExes=(week>1&&log[prevLk])||[];
+  useEffect(()=>{onSave(lk,exercises);},[exercises]);
+  const updEx=(id,u)=>setExercises(p=>p.map(e=>e.id===id?u:e));
+  const delEx=(id)=>setExercises(p=>p.filter(e=>e.id!==id));
+  const addEx=(mk,pk,pd,exName)=>{
+    const alts=(pd.ex.length>=3?pd.ex:[...pd.ex,...pd.ex]).slice(0,3);
+    setExercises(p=>[...p,{id:uid(),pattern:pd.label,muscle:mk,repRange:RR[pk]||"8-12",alts,sel:Math.max(0,alts.indexOf(exName)),sets:[1,2,3].map(n=>({id:uid(),n,kg:"",reps:"",rir:"",repRange:RR[pk]||"8-12"})),note:""}]);
+    setShowAdd(false);
+  };
+  return(
+    <div style={col({paddingBottom:80})}>
+      <div style={{padding:"18px 16px 14px",background:T.surface,borderBottom:"1px solid "+T.border,position:"sticky",top:0,zIndex:10}}>
+        <div style={row({gap:12})}>
+          <button onClick={onBack} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:26,padding:0,lineHeight:1}}>‹</button>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,letterSpacing:1,lineHeight:1}}>{session.name}</div>
+            <div style={{color:T.muted,fontSize:12}}>Semaine {week}</div>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:16}}>
+        {exercises.map((ex,i)=>(
+          <ExCard key={ex.id} ex={ex} prevEx={prevExes[i]} onChange={u=>updEx(ex.id,u)}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  MANUAL SESSION — séance libre avec logging direct
+// ══════════════════════════════════════════════════════════════
+function ManualSession({week,onBack,onSave,customDB}){
+  const[name,setName]=useState("Séance libre");
+  const[exercises,setExercises]=useState([]);
+  const[showAdd,setShowAdd]=useState(true);
+  useEffect(()=>{if(exercises.length>0)onSave("w"+week+"_manual_"+name,exercises);},[exercises,name]);
+  const updEx=(id,u)=>setExercises(p=>p.map(e=>e.id===id?u:e));
+  const delEx=(id)=>setExercises(p=>p.filter(e=>e.id!==id));
+  const addEx=(mk,pk,pd,exName)=>{
+    const alts=(pd.ex.length>=3?pd.ex:[...pd.ex,...pd.ex]).slice(0,3);
+    setExercises(p=>[...p,{id:uid(),pattern:pd.label,muscle:mk,repRange:RR[pk]||"8-12",alts,sel:Math.max(0,alts.indexOf(exName)),sets:[1,2,3].map(n=>({id:uid(),n,kg:"",reps:"",rir:"",repRange:RR[pk]||"8-12"})),note:""}]);
+    setShowAdd(false);
+  };
+  return(
+    <div style={col({paddingBottom:80})}>
+      <div style={{padding:"18px 16px 14px",background:T.surface,borderBottom:"1px solid "+T.border,position:"sticky",top:0,zIndex:10}}>
+        <div style={row({gap:12})}>
+          <button onClick={onBack} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:26,padding:0,lineHeight:1}}>‹</button>
+          <input value={name} onChange={e=>setName(e.target.value)} style={{background:"none",border:"none",color:T.text,fontSize:22,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,letterSpacing:1,outline:"none",flex:1}}/>
+        </div>
+      </div>
+      <div style={{padding:16}}>
+        {exercises.map(ex=><ExCard key={ex.id} ex={ex} onChange={u=>updEx(ex.id,u)} onRemove={()=>delEx(ex.id)}/>)}
+        {!showAdd
+          ?<button onClick={()=>setShowAdd(true)} style={{background:"none",border:"1px dashed "+T.border,borderRadius:12,color:T.muted,padding:14,cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%"}}>+ Ajouter un exercice</button>
+          :<ExPicker customDB={customDB} onPick={addEx} onClose={exercises.length>0?()=>setShowAdd(false):undefined}/>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  LIBRARY
+// ══════════════════════════════════════════════════════════════
+function Library({customDB,onAddCustom}){
+  const[search,setSearch]=useState("");
+  const[open,setOpen]=useState({});
+  const[showAdd,setShowAdd]=useState(false);
+  const[nex,setNex]=useState({name:"",muscle:"pectoraux",pk:""});
+  const allDB=Object.assign({},DB,customDB);
+  const tog=(k)=>setOpen(p=>({...p,[k]:!p[k]}));
+  const allExs=Object.entries(allDB).flatMap(([mk,mv])=>Object.entries(mv.patterns||{}).flatMap(([pk,pd])=>pd.ex.map(e=>({name:e,muscle:mv.label,pattern:pd.label}))));
+  const filtered=search?allExs.filter(e=>e.name.toLowerCase().includes(search.toLowerCase())):null;
+  return(
+    <div style={col({padding:"20px 16px",gap:14})}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:32,fontWeight:900,letterSpacing:3,color:T.accent,paddingTop:16}}>BIBLIOTHÈQUE</div>
+      <input type="text" placeholder="🔍 Rechercher..." value={search} onChange={e=>setSearch(e.target.value)} style={inp({fontSize:15,padding:"10px 14px"})}/>
+      {filtered?(
+        <div style={col({gap:6})}>
+          {filtered.slice(0,30).map((e,i)=><div key={i} style={{background:T.card,borderRadius:8,padding:"10px 14px",border:"1px solid "+T.border}}><div style={{fontSize:14}}>{e.name}</div><div style={{color:T.muted,fontSize:11,marginTop:2}}>{e.muscle} · {e.pattern}</div></div>)}
+          {!filtered.length&&<div style={{color:T.muted,textAlign:"center",padding:24}}>Aucun résultat</div>}
+        </div>
+      ):(
+        <div style={col({gap:8})}>
+          {Object.entries(allDB).map(([mk,mv])=>(
+            <div key={mk} style={{background:T.card,border:"1px solid "+T.border,borderRadius:12,overflow:"hidden"}}>
+              <div onClick={()=>tog(mk)} style={{padding:"13px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:700,letterSpacing:1}}>{mv.label}</div>
+                <span style={{color:T.muted}}>{open[mk]?"↑":"↓"}</span>
+              </div>
+              {open[mk]&&Object.entries(mv.patterns||{}).map(([pk,pd])=>(
+                <div key={pk} style={{borderTop:"1px solid "+T.border,padding:"10px 16px"}}>
+                  <div style={{color:T.accent,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:7}}>{pd.label}</div>
+                  {pd.ex.map((e,i)=><div key={i} style={{padding:"3px 0",fontSize:13,color:T.muted,borderBottom:i<pd.ex.length-1?"1px solid "+T.border:"none"}}>{e}</div>)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+      {!showAdd
+        ?<Btn active onClick={()=>setShowAdd(true)} style={{fontSize:14,padding:14}}>+ Ajouter un exercice personnalisé</Btn>
+        :(<div style={{background:T.card,border:"1px solid "+T.accent,borderRadius:14,padding:16}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:700,letterSpacing:1,marginBottom:14}}>Nouvel exercice</div>
+          <div style={col({gap:10})}>
+            <div><div style={{color:T.muted,fontSize:11,marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Nom</div><input value={nex.name} onChange={e=>setNex(p=>({...p,name:e.target.value}))} placeholder="Ex: Curl poulie haute" style={inp()}/></div>
+            <div><div style={{color:T.muted,fontSize:11,marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Groupe musculaire</div><select value={nex.muscle} onChange={e=>setNex(p=>({...p,muscle:e.target.value,pk:""}))} style={inp()}>{Object.entries(DB).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+            <div><div style={{color:T.muted,fontSize:11,marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Pattern</div><select value={nex.pk} onChange={e=>setNex(p=>({...p,pk:e.target.value}))} style={inp()}><option value="">-- Choisir --</option>{Object.entries((DB[nex.muscle]&&DB[nex.muscle].patterns)||{}).map(([pk,pd])=><option key={pk} value={pk}>{pd.label}</option>)}</select></div>
+            <div style={row({gap:8})}>
+              <Btn onClick={()=>setShowAdd(false)} style={{flex:1}}>Annuler</Btn>
+              <Btn active onClick={()=>{if(!nex.name||!nex.pk)return;onAddCustom(nex.muscle,nex.pk,nex.name);setShowAdd(false);setNex({name:"",muscle:"pectoraux",pk:""});}} disabled={!nex.name||!nex.pk} style={{flex:1}}>Ajouter ✓</Btn>
+            </div>
+          </div>
+        </div>)}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  APP
+// ══════════════════════════════════════════════════════════════
+function App(){
+  const[syncCode,setSyncCode]=useState(localStorage.getItem(SYNC_KEY));
+  const[state,setState]=useState(defaults());
+  const[ready,setReady]=useState(false);
+  const[view,setView]=useState("home");
+  const[activeSession,setActiveSession]=useState(null);
+  const[editingSession,setEditingSession]=useState(null);
+  const[isManual,setIsManual]=useState(false);
+  const saveTimer=useRef(null);
+
+  useEffect(()=>{
+    if(!syncCode)return;
+    fbLoad(syncCode).then(data=>{
+      if(data)setState(data);
+      setView(data&&data.program?"home":"setup");
+      setReady(true);
+    });
+  },[syncCode]);
+
+  useEffect(()=>{
+    if(!syncCode||!ready)return;
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>fbSave(syncCode,state),2000);
+    return()=>clearTimeout(saveTimer.current);
+  },[state,ready,syncCode]);
+
+  const upd=useCallback((patch)=>setState(s=>({...s,...patch})),[]);
+
+  const handleSync=(code,data)=>{
+    setSyncCode(code);
+    if(data)setState(data);
+    setView(data&&data.program?"home":"setup");
+    setReady(true);
+  };
+
+  // Après setup assisté → program_editor pour review/config
+  const handleSetupDone=(d)=>{
+    const sd=SPLITS[d.split],sched=sd.schedules[d.days];
+    const sessions=sched.map((type,i)=>({
+      id:uid(),type,
+      name:"J"+(i+1)+" – "+sd.sessions[type].name,
+      exercises:buildExercises(type,sd,d.priority,d.exCount,state.customDB)
+    }));
+    upd({program:{split:d.split,days:d.days,exCount:d.exCount,priority:d.priority},sessions,log:{},week:1});
+    setView("program_editor");
+  };
+
+  // Après création de zéro → program_editor pour review
+  const handleProgramBuilderDone=(sessions)=>{
+    upd({program:{split:"custom",days:sessions.length,exCount:0,priority:[]},sessions,log:{},week:1});
+    setView("program_editor");
+  };
+
+  const handleSave=(key,exercises)=>upd({log:{...state.log,[key]:exercises}});
+
+  const handleAddCustom=(muscle,pk,name)=>{
+    const cur=state.customDB[muscle]||{label:(DB[muscle]&&DB[muscle].label)||muscle,patterns:{}};
+    const existPat=(DB[muscle]&&DB[muscle].patterns[pk])||{label:pk,ex:[]};
+    const curPat=cur.patterns[pk]||{...existPat,ex:[...existPat.ex]};
+    if(curPat.ex.includes(name))return;
+    if(DB[muscle]&&DB[muscle].patterns[pk]&&!DB[muscle].patterns[pk].ex.includes(name))DB[muscle].patterns[pk].ex.push(name);
+    upd({customDB:{...state.customDB,[muscle]:{...cur,patterns:{...cur.patterns,[pk]:{...curPat,ex:[...curPat.ex,name]}}}}});
+  };
+
+  const handleEditSession=(s)=>{ setEditingSession(s); setView("session_setup"); };
+
+  const handleSessionSetupBack=(updatedSession)=>{
+    upd({sessions:state.sessions.map(s=>s.id===updatedSession.id?updatedSession:s)});
+    setEditingSession(null);
+    setView("program_editor");
+  };
+
+  if(!syncCode)return React.createElement(SyncScreen,{onSync:handleSync});
+  if(!ready)return React.createElement("div",{style:{background:T.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontFamily:"'DM Sans',sans-serif",fontSize:16}},"Chargement...");
+
+  const hideNav=["setup","program_builder","session_setup"].includes(view);
+
+  return(
+    <div style={{background:T.bg,minHeight:"100vh",fontFamily:"'DM Sans',sans-serif",color:T.text,paddingBottom:state.program&&!hideNav?68:0,maxWidth:600,margin:"0 auto"}}>
+      {view==="setup"&&<Setup onDone={handleSetupDone} onCustom={()=>setView("program_builder")}/>}
+      {view==="program_builder"&&<ProgramBuilder onDone={handleProgramBuilderDone} onBack={()=>setView("setup")} customDB={state.customDB}/>}
+      {view==="program_editor"&&<ProgramEditor sessions={state.sessions} program={state.program} onEditSession={handleEditSession} onStart={()=>setView("home")}/>}
+      {view==="session_setup"&&editingSession&&<SessionSetup session={editingSession} customDB={state.customDB} onBack={handleSessionSetupBack} freeMode={state.program&&state.program.split==="custom"}/>}
+      {view==="home"&&<Home state={state} syncCode={syncCode} setWeek={fn=>upd({week:fn(state.week)})} onOpen={s=>{setActiveSession(s);setIsManual(false);setView("session");}} onManual={()=>{setIsManual(true);setView("session");}} onReset={()=>{upd({...defaults(),customDB:state.customDB});setView("setup");}}/>}
+      {view==="session"&&!isManual&&activeSession&&<Session session={activeSession} week={state.week} log={state.log} onBack={()=>setView("home")} onSave={handleSave} customDB={state.customDB}/>}
+      {view==="session"&&isManual&&<ManualSession week={state.week} onBack={()=>setView("home")} onSave={handleSave} customDB={state.customDB}/>}
+      {view==="library"&&<Library customDB={state.customDB} onAddCustom={handleAddCustom}/>}
+      {state.program&&!hideNav&&(
+        <nav style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,background:T.surface,borderTop:"1px solid "+T.border,display:"flex",zIndex:100}}>
+          {[
+            {id:"home",label:"Accueil",icon:"⌂"},
+            {id:"program_editor",label:"Programme",icon:"◈"},
+            {id:"library",label:"Exercices",icon:"≡"}
+          ].map(tab=>(
+            <button key={tab.id} onClick={()=>setView(tab.id)} style={{flex:1,padding:"10px 0",background:"none",border:"none",color:view===tab.id?T.accent:T.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span style={{fontSize:22}}>{tab.icon}</span>
+              <span style={{fontSize:10,fontFamily:"'DM Sans',sans-serif"}}>{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
